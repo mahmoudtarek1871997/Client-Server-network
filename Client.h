@@ -10,6 +10,8 @@
 #include <stdlib.h>
 #include<string.h>
 #include<string>
+#include <regex>
+#include <unistd.h>
 #include<sys/socket.h>    //socket
 #include<arpa/inet.h> //inet_addr
 #include<netdb.h> //hostent
@@ -19,19 +21,13 @@ using namespace std;
 class Client {
 public:
     Client();
-
     bool conToserver(string hostName, int port);
-
     void handleRequest(string method, string fileName);
-
+    void closeSocket();
     struct in_addr getHostIP(string hostName);
-
     string recieveData(int size, string fileName);
-
     bool sendHeader(string data);
-
     void sendFile(string fileName);
-
     struct sockaddr_in server;
     int soc_desc;
 
