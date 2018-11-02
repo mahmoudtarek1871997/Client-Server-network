@@ -3,6 +3,7 @@
 //
 
 #include <arpa/inet.h>
+#include<pthread.h>
 #include "Server.h"
 
 Server::Server() {}
@@ -70,4 +71,57 @@ string Server::recieveData(int socket, int size, string fileName) {
 
 void Server::closeCon(int socket) {
     close(socket);
+}
+
+
+void Server::startServer(int queueSize) {
+    pthread_t threads[queueSize];
+    int i = 0;
+    while (i > 0) { // run forever
+        struct sockaddr_in cli_add;
+        socklen_t cli_len;
+        int socket = acceptCon(cli_add, cli_len);
+
+        if (pthread_create(&threads[i], NULL, socketThread, &socket) != 0)
+            printf("Failed to create thread\n");
+
+        // if maximum queue size is reached, wait for connections to finish
+        if (i >= queueSize) {
+            for (i = 0; i < queueSize; i++)
+                pthread_join(threads[i++], NULL);
+            i = 0;
+        }
+
+    }
+}
+
+void *Server::socketThread(void *arg) {
+
+    int socket = *((int *) arg);
+    string filename = std::to_string(socket) + ".txt";
+    string data = recieveData(socket, 1500, filename);
+    if (data[0] == 'P') { // post request
+        /**
+         *
+         *
+         *
+         * */
+    } else if (data[0] == 'G') { // get request
+        /**
+         *
+         *
+         *
+         * */
+    } else {
+        cout << "Undefined request from client ! \n";
+    }
+    closeCon(socket);
+    pthread_exit(NULL);
+
+}
+
+
+int main() {
+    std::cout << "Hello, Server!" << std::endl;
+    return 0;
 }

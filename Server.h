@@ -77,4 +77,16 @@ public:
      */
     void closeCon(int socket);
 
+    /**
+     * start running server
+     * @param queueSize the max size of clients that can be handled in queue
+     */
+    void startServer(int queueSize);
+
+    /**
+     * Socket thread job
+     * @param arg send the socket fd as argument
+     * @return
+     */
+    void *socketThread(void *arg);
 };

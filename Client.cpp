@@ -87,3 +87,10 @@ void Client::sendFile(string fileName) {
     }
     fclose(fp);
 }
+
+
+
+int main() {
+    std::cout << "Hello, Client!" << std::endl;
+    return 0;
+}
