@@ -48,12 +48,10 @@ public:
 
     /**
      * function will write the connecting client's address info
-     * into the the address structure and the size of that structure is clilen.
-     * @param cli_addr
-     * @param cli_len
+     * into the the address structure and the size of that structure.
      * @return a new socket file descriptor for the accepted connection, if failed return -1
      */
-    int acceptCon(sockaddr_in cli_addr, socklen_t cli_len);
+    int acceptCon();
 
     /**
      * send data
@@ -83,10 +81,16 @@ public:
      */
     void startServer(int queueSize);
 
-    /**
+
+};
+
+struct serverArgs{
+    int socket;
+    Server* server;
+};
+/**
      * Socket thread job
      * @param arg send the socket fd as argument
      * @return
      */
-    void *socketThread(void *arg);
-};
+void *socketThread(void *arg);

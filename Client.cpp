@@ -89,8 +89,8 @@ void Client::sendFile(string fileName) {
 }
 
 
-
-int main() {
-    std::cout << "Hello, Client!" << std::endl;
-    return 0;
-}
+//
+//int main() {
+//    std::cout << "Hello, Client!" << std::endl;
+//    return 0;
+//}

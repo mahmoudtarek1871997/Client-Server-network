@@ -37,9 +37,10 @@ void Server::listenToCon(int queue_size) {
     listen(sock_fd, queue_size);
 }
 
-int Server::acceptCon(sockaddr_in cli_addr, socklen_t cli_len) {
+int Server::acceptCon() {
+    int len = sizeof(struct sockaddr_in);
     // will write the client addr and len into the sent parameters
-    new_socket = accept(sock_fd, (struct sockaddr *) &cli_addr, &cli_len);
+    new_socket = accept(sock_fd, (struct sockaddr *) &cli_addr, (socklen_t *) &len);
     if (new_socket < 0) {
         cout << "Accepting connection failed";
         return -1;
@@ -80,9 +81,10 @@ void Server::startServer(int queueSize) {
     while (i > 0) { // run forever
         struct sockaddr_in cli_add;
         socklen_t cli_len;
-        int socket = acceptCon(cli_add, cli_len);
-
-        if (pthread_create(&threads[i], NULL, socketThread, &socket) != 0)
+        serverArgs server_args;
+        server_args.socket = acceptCon();
+        server_args.server = this;
+        if (pthread_create(&threads[i], NULL, socketThread, &server_args) != 0)
             printf("Failed to create thread\n");
 
         // if maximum queue size is reached, wait for connections to finish
@@ -95,11 +97,13 @@ void Server::startServer(int queueSize) {
     }
 }
 
-void *Server::socketThread(void *arg) {
+void *socketThread(void *arg) {
 
-    int socket = *((int *) arg);
+    serverArgs *args = ((serverArgs *) arg);
+    int socket = args->socket;
     string filename = std::to_string(socket) + ".txt";
-    string data = recieveData(socket, 1500, filename);
+    Server *server = args->server;
+    string data = server->recieveData(socket, 1500, filename);
     if (data[0] == 'P') { // post request
         /**
          *
@@ -115,13 +119,26 @@ void *Server::socketThread(void *arg) {
     } else {
         cout << "Undefined request from client ! \n";
     }
-    closeCon(socket);
+    server->closeCon(socket);
     pthread_exit(NULL);
 
 }
 
+#define port 8080
 
 int main() {
-    std::cout << "Hello, Server!" << std::endl;
+    std::cout << "Hello, Server! \n";
+    Server *server = new Server();
+    server->createSocketFD();
+    cout << "socket created \n";
+    bool res = server->bindServer(port);
+    cout << "binding finished " << res << std::endl;
+
+    server->listenToCon(50);
+    cout << "Listening .." << std::endl;
+    int soc = server->acceptCon();
+    string data = server->recieveData(soc, 1500, std::to_string(soc) + ".txt");
+    cout << "Data: " << data << std::endl;
+    server->closeCon(soc);
     return 0;
 }
