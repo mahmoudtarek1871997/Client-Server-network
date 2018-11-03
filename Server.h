@@ -22,11 +22,8 @@ class Server {
 public:
     Server();
 
-    int sock_fd, new_socket, valread;
-    struct sockaddr_in address;
-    int addrlen = sizeof(address);
-    char buffer[1500];
-    struct sockaddr_in serv_addr, cli_addr;
+    int sock_fd, new_socket;
+    struct sockaddr_in serv_addr;
 
     /**
      * create socket file descriptor, return true if the file descriptor successfully created, -1 otherwise

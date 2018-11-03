@@ -10,13 +10,13 @@
 Client::Client() {}
 
 bool Client::conToserver(string hostName, int port) {
+    struct sockaddr_in server_add;
     soc_desc = socket(AF_INET, SOCK_STREAM, 0);
     if (soc_desc > 0) {
-        server.sin_family = AF_INET;
-        server.sin_port = htons(port);
-        server.sin_addr = getHostIP(hostName);
-        int con = connect(soc_desc, (struct sockaddr *) &server, sizeof(server));
-        return con > 0;
+        server_add.sin_family = AF_INET;
+        server_add.sin_port = htons(port);
+        server_add.sin_addr = getHostIP(hostName);
+        return connect(soc_desc, (struct sockaddr *) &server_add, sizeof(server_add)) == 0;
     }
     return false;
 }
@@ -126,7 +126,8 @@ int main(int argc, char *argv[]) {
 
     Client c;
     string data = "POST test.html HTTP/1.1";
-    c.conToserver("localhost", 8080);
+    if (! c.conToserver("localhost", 8080))
+        cout << "error in connecting" << endl;
     c.handleRequest(data);
     c.closeSocket();
 

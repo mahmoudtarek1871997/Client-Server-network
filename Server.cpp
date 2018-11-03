@@ -27,7 +27,6 @@ bool Server::bindServer(int portno) {
     serv_addr.sin_addr.s_addr = INADDR_ANY;
     // convert short integer value for port must be converted into network byte order
     serv_addr.sin_port = htons(portno);
-
     if (bind(sock_fd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
         cout << "Binding failed";
         return false;
@@ -41,6 +40,7 @@ void Server::listenToCon(int queue_size) {
 
 int Server::acceptCon() {
     int len = sizeof(struct sockaddr_in);
+    struct sockaddr_in cli_addr;
     // will write the client addr and len into the sent parameters
     new_socket = accept(sock_fd, (struct sockaddr *) &cli_addr, (socklen_t *) &len);
     if (new_socket < 0) {
@@ -175,7 +175,6 @@ int main() {
     cout << "socket created \n";
     bool res = server->bindServer(port);
     cout << "binding finished " << res << endl;
-
     server->listenToCon(50);
     cout << "Listening .." << endl;
 

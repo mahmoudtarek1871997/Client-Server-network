@@ -26,7 +26,6 @@ public:
     string recieveData(int size, string fileName);
     bool sendHeader(string data);
     void sendFile(string fileName);
-    struct sockaddr_in server;
     int soc_desc;
 
 
