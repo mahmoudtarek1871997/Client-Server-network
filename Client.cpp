@@ -2,7 +2,9 @@
 // Created by yassmin on 31/10/18.
 //
 
-#include <regex>
+#include <vector>
+#include <sstream>
+#include <zconf.h>
 #include "Client.h"
 
 Client::Client() {}
@@ -19,34 +21,72 @@ bool Client::conToserver(string hostName, int port) {
     return false;
 }
 
-void Client::handleRequest(string method, string fileName) {
+void Client::handleRequest(string req) {
+    stringstream ss(req);
+    vector<string> result;
+    while (ss.good()) {
+        string substr;
+        getline(ss, substr, ' ');
+        result.push_back(substr);
+    }
+    string method = result[0];
+    string fileName = result[1];
+
     if (method == "GET") {
-        if (sendHeader("GET " + fileName + " HTTP/1.1")) {
-            recieveData(1500, fileName); //////////////////////////////change
+        cout << "GET " + fileName + " HTTP/1.1\r\n\r\n";
+        if (sendHeader("GET " + fileName + " HTTP/1.1\r\n\r\n")) {
+            cout << recieveData(1024, fileName);
+        } else {
+            cout << "Error while sending Header." << endl;
         }
 
     } else {
-        if (sendHeader("POST " + fileName + " HTTP/1.1")) {
-            if (recieveData(1500, fileName) == "OK") { //////////////////////////////change
-                sendFile(fileName);
+        cout << "POST " + fileName + " HTTP/1.1" << endl;
+        char buffer[1024];
+        memset(buffer, 0, sizeof(buffer));
+        if (send(soc_desc, req.c_str(), strlen(req.c_str()), 0) > 0) {
+            if (recv(soc_desc, buffer, sizeof(buffer), 0) > 0) {
+                if (strcmp(buffer, "OK") == 0) {
+                    cout << "POST OK recieved from server\n";
+                    cout << "sending file ....." << endl;
+                    sendFile(fileName);
+
+                } else {
+                    cout << buffer << "recieved from server!\n" << endl;
+                }
+            } else {
+                cout << "recieving failed!\n" << endl;
             }
+        } else {
+            cout << "sending failed!\n" << endl;
         }
     }
 }
 
 bool Client::sendHeader(string data) {
-    return send(soc_desc, data.c_str(), strlen(data.c_str()), 0) > 0;
+    int size = send(soc_desc, data.c_str(), strlen(data.c_str()), 0);
+    if (size > 0) {
+        cout << "header sent, size: " << size << endl;
+        return true;
+    }
+    return false;
 }
 
 string Client::recieveData(int size, string fileName) {   /////////////change can't read the hole file
     FILE *fp = fopen(fileName.c_str(), "w");
     char buffer[size];
     string data = "";
-    if (recv(soc_desc, buffer, sizeof(buffer), 0) > 0) {
-        data = buffer;
-        fwrite(buffer, sizeof(char), sizeof(buffer), fp);
-        fflush(fp);
-    }
+    ssize_t recvSize;
+    do {
+        memset(buffer, 0, sizeof(buffer));
+        recvSize = recv(soc_desc, buffer, sizeof(buffer), 0);
+        if (recvSize > 0) {
+            //  cout << "recvSize " << recvSize << endl;
+            data += buffer;
+            fwrite(buffer, sizeof(char), recvSize, fp);
+            fflush(fp);
+        }
+    } while (recvSize > 0);
     fclose(fp);
     return data;
 
@@ -58,39 +98,37 @@ struct in_addr Client::getHostIP(string hostName) {
 
     if ((host = gethostbyname(hostName.c_str())) != NULL) {
         in_list = (struct in_addr **) host->h_addr_list;
-        cout << hostName << ": " << inet_ntoa(**in_list) << "\n";
+        // cout << hostName << ": " << inet_ntoa(**in_list) << "\n";
         return **in_list;
     }
 }
 
 void Client::sendFile(string fileName) {
+    char buff[1024];
+    memset(buff, 0, sizeof(buff));
     FILE *fp = fopen(fileName.c_str(), "r");
-    fseek(fp, 0, SEEK_END);
-    long FileSize = ftell(fp);
-    rewind(fp);
-    long SizeCheck = 0;
-    char *buff;
-    if (FileSize > 1499) {
-
-        while (SizeCheck < FileSize) {
-            buff = (char *) malloc(1500);
-            int Read = fread(buff, 1500, sizeof(char), fp);
-            send(soc_desc, buff, Read, 0);
-            SizeCheck += Read;
-            free(buff);
-        }
-    } else {
-        buff = (char *) malloc(FileSize + 1);
-        fread(buff, FileSize + 1, sizeof(char), fp);
-        send(soc_desc, buff, FileSize, 0);
-        free(buff);
+    int read = 0;
+    while ((read = fread(buff, 1, sizeof(buff), fp)) > 0) {
+        // cout << "buff" << buff << "\n";
+        send(soc_desc, buff, read, 0);
+        memset(buff, 0, sizeof(buff));
     }
+
     fclose(fp);
+    cout << "Sending finished successfully" << endl;
 }
 
+void Client::closeSocket() {
+    close(soc_desc);
+}
 
-//
-//int main() {
-//    std::cout << "Hello, Client!" << std::endl;
-//    return 0;
-//}
+int main(int argc, char *argv[]) {
+
+    Client c;
+    string data = "POST test.html HTTP/1.1";
+    c.conToserver("localhost", 8080);
+    c.handleRequest(data);
+    c.closeSocket();
+
+    return 0;
+}

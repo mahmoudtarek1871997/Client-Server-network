@@ -81,6 +81,12 @@ public:
      */
     void startServer(int queueSize);
 
+    /**
+     * parse request from client
+     * @param req
+     */
+    void parseRequest( int soc, string req);
+    void sendFile(string fileName, int soc);
 
 };
 
