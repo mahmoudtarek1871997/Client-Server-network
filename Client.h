@@ -35,9 +35,9 @@ public:
 
     void handleGET(string message, string fileName);
 
-    void handlePOST(string message);
+    void handlePOST(string message, string fileName);
 
-    void handleFIN();
+    void handleFIN(string message);
 
     vector<string> split(string stringToBeSplitted, string delimeter);
 

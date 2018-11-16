@@ -50,39 +50,37 @@ void Client::handleGET(string message, string fileName) {
     }
 }
 
-void Client::handlePOST(string message) {
-//    string header = "POST " + fileName + " HTTP/1.1\r\n\r\n"; // attach length header
-//    cout << header << endl;
+void Client::handlePOST(string message, string fileName) {
     char buffer[1024];
     memset(buffer, 0, sizeof(buffer));
     if (sendRequest(message)) {
-//        if (recv(soc_desc, buffer, sizeof(buffer), 0) > 0) { // needs to parse ok 200 from server
-//            if (strcmp(buffer, "OK") == 0) {
-//                cout << "POST OK recieved from server\n";
-//                cout << "sending file ....." << endl;
-//                sendFile(fileName);
-//
-//            } else {
-//                cout << buffer << "recieved from server!\n" << endl;
-//            }
-//        } else {
-//            cout << "recieving failed!\n" << endl;
-//        }
-//    } else {
-//        cout << "sending failed!\n" << endl;
+        if (recv(soc_desc, buffer, sizeof(buffer), 0) > 0) { // needs to parse ok 200 from server
+            if (strcmp(buffer, "HTTP/1.0 200 OK\r\n\r\n") == 0) {
+                cout << "POST OK recieved from server\n";
+                cout << "sending file ....." << endl;
+                sendFile(fileName);
+
+            } else {
+                cout << "post is not ok, " << buffer << "recieved from server!\n" << endl;
+            }
+        } else {
+            cout << "recieving failed!\n" << endl;
+        }
+    } else {
+        cout << "sending failed!\n" << endl;
     }
 }
 
-void Client::handleFIN() {
-    cout << "FIN " << endl;
-    if (sendRequest("FIN \r\n\r\n")) {
+void Client::handleFIN(string message) {
+    cout << message << endl;
+    if (sendRequest(message)) {
         cout << "FIN Sent" << endl;
-        char buffer[7];
+        char buffer[10];
         string ack = "";
         memset(buffer, 0, sizeof(buffer));
-        recv(soc_desc, buffer, sizeof(buffer), 0);
+        int recvSize = recv(soc_desc, buffer, sizeof(buffer), 0);
         ack = buffer;
-        if (ack == "FINACK") {
+        if (ack == "FINACK\r\n\r\n") {
             cout << "closing acknowledged" << endl;
             closeSocket();
         } else {
@@ -107,14 +105,16 @@ void Client::handleRequest(string message) {
         reqLine.push_back(substr);
     }
     string method = reqLine[0];
-    string fileName = reqLine[1];
+    string fileName = "";
+    if (method != "FIN")
+        fileName = reqLine[1];
 
     if (method == "GET") {
         handleGET(message, fileName);
     } else if (method == "POST") {
-        handlePOST(message);
+        handlePOST(message, fileName);
     } else if (method == "FIN") {
-        handleFIN();
+        handleFIN(message);
     } else {
         cout << "invalid request!" << endl;
     }
@@ -123,7 +123,7 @@ void Client::handleRequest(string message) {
 bool Client::sendRequest(string request) {
     int size = send(soc_desc, request.c_str(), strlen(request.c_str()), 0);
     if (size > 0) {
-        cout << "header sent, size: " << size << endl;
+        cout << "request sent: \n" << request << endl;
         return true;
     }
     return false;
@@ -189,6 +189,7 @@ void Client::sendFile(string fileName) {
     memset(buff, 0, sizeof(buff));
     FILE *fp = fopen(fileName.c_str(), "r");
     int read = 0;
+    cout << fileName << endl;
     while ((read = fread(buff, 1, sizeof(buff), fp)) > 0) {
         send(soc_desc, buff, read, 0);
         memset(buff, 0, sizeof(buff));
@@ -199,7 +200,7 @@ void Client::sendFile(string fileName) {
 }
 
 void Client::sendCloseSignal() {
-    string data = "FIN";
+    string data = "FIN\r\n\r\n";
     handleRequest(data);
 }
 
@@ -236,7 +237,7 @@ int main(int argc, char *argv[]) {
         cout << "error while connecting" << endl;
     c.handleRequest(data);
 //    c.handleRequest(data);
-//    c.sendCloseSignal();
+    c.sendCloseSignal();
 
     return 0;
 }
