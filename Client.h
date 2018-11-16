@@ -23,12 +23,29 @@ public:
     void handleRequest(string req);
     void closeSocket();
     struct in_addr getHostIP(string hostName);
-    string recieveData(int size, string fileName);
-    bool sendHeader(string data);
+    string receiveResponse(int size, string fileName);
+    bool sendRequest(string data);
     void sendFile(string fileName);
     int soc_desc;
 
+    /*
+     * send FIN signal to server
+     * */
+    void sendCloseSignal();
 
+    void handleGET(string message, string fileName);
+
+    void handlePOST(string message);
+
+    void handleFIN();
+
+    vector<string> split(string stringToBeSplitted, string delimeter);
+
+    /**
+     * get content length in get response
+     * @return the content length or -1 if content length header not found
+     * */
+    int getContentLen(char *buffer, int startIndex, int recvSize);
 };
 
 
