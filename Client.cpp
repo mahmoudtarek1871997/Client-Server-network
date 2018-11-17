@@ -44,7 +44,6 @@ bool Client::conToserver(string hostName, int port) {
 void Client::handleGET(string message, string fileName) {
     if (sendRequest(message)) {
         receiveResponse(1024, fileName);
-
     } else {
         cout << "Error while sending message: " << message << endl;
     }
@@ -147,9 +146,9 @@ string Client::receiveResponse(int size, string fileName) {
         while (!(buffer[i] == '\r' && buffer[i + 1] == '\n' && buffer[i + 2] == '\r' && buffer[i + 3] == '\n'))
             i++;
         i += 4;
+        cout << len << "  << len "<< endl;
         char data[1024];
         int j = 0;
-        cout << "recv size  " << recvSize << "   len  " << len << endl;
         FILE *fp = fopen(fileName.c_str(), "w");
         while (len > 0) { // need piplining ////////////////////////////////////////////////////////////////
             while (i < recvSize) {
@@ -162,6 +161,7 @@ string Client::receiveResponse(int size, string fileName) {
             fflush(fp);
             if (len > 0) { // there are more data
                 i = 0, j = 0;
+                cout<<"hehehehehehhe" << fileName << len <<endl;
                 memset(buffer, 0, sizeof(buffer));
                 recvSize = recv(soc_desc, buffer, sizeof(buffer), 0);
             }
@@ -215,6 +215,7 @@ int Client::getContentLen(char *buffer, int startIndex, int recvSize) {
            i < recvSize)  // get the remain of the response message
         response += buffer[i++];
     vector<string> headers = split(response, "\r\n");
+    cout << "hhhh" << headers[0] << endl;
     for (string str: headers) {
         if (str.substr(0, 14).compare("Content-Length") == 0) { // if Content-Length Header
             stringstream lenStream(str.substr(16, str.size() - 15));
@@ -232,11 +233,22 @@ int Client::getContentLen(char *buffer, int startIndex, int recvSize) {
 int main(int argc, char *argv[]) {
 
     Client c;
-    string data = "GET test.html HTTP/1.1\r\n\r\n";
+    string data = "GET test.txt HTTP/1.1\r\n\r\n";
     if (!c.conToserver("localhost", 8080))
         cout << "error while connecting" << endl;
     c.handleRequest(data);
-//    c.handleRequest(data);
+    data = "GET test2.txt HTTP/1.1\r\n\r\n";
+    c.handleRequest(data);
+    data = "GET test3.txt HTTP/1.1\r\n\r\n";
+    c.handleRequest(data);
+    data = "GET test4.txt HTTP/1.1\r\n\r\n";
+    c.handleRequest(data);
+    data = "GET test5.txt HTTP/1.1\r\n\r\n";
+    c.handleRequest(data);
+    data = "GET test6.txt HTTP/1.1\r\n\r\n";
+    c.handleRequest(data);
+    data = "GET test7.txt HTTP/1.1\r\n\r\n";
+    c.handleRequest(data);
     c.sendCloseSignal();
 
     return 0;

@@ -92,6 +92,8 @@ public:
     void handlePOST(int soc, string fileName);
 
     void handleFIN(int soc);
+
+    int getFileLen(string fileName);
 };
 
 struct serverArgs{

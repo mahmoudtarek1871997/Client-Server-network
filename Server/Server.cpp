@@ -47,7 +47,7 @@ bool Server::bindServer(int portno) {
     // convert short integer value for port must be converted into network byte order
     serv_addr.sin_port = htons(portno);
     if (bind(sock_fd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
-        cout << "Binding failed";
+        cout << "Binding failed" << endl;
         return false;
     }
     return true;
@@ -127,7 +127,7 @@ void Server::parseRequest(int soc, string req) {
     } else if (method == "POST") {
         handlePOST(soc, fileName);
     } else if (method == "FIN") {
-       handleFIN(soc);
+        handleFIN(soc);
     } else {
         cout << "Invalid request!" << endl;
     }
@@ -156,6 +156,7 @@ void Server::closeCon(int socket) {
 
     close(socket);
     cout<<"Connection closed!"<<endl;
+    pthread_exit(NULL);
 
 }
 
@@ -189,35 +190,41 @@ void *socketThread(void *arg) {
     serverArgs *args = ((serverArgs *) arg);
     int socket = args->socket;
     Server *server = args->server;
-//    for(int i = 0 ; i < 5 ; i++) {
-    char buffer[1024];
-    memset(buffer, 0, sizeof(buffer));
-    string req = "";
-    recv(socket, buffer, sizeof(buffer), 0);
-    req = buffer;
+    while(1) {
+        char buffer[1024];
+        memset(buffer, 0, sizeof(buffer));
+        string req = "";
+        recv(socket, buffer, sizeof(buffer), 0);
+        req = buffer;
 
-    server->parseRequest(socket, req);
-//    }
-
-    memset(buffer, 0, sizeof(buffer));
-    req = "";
-    recv(socket, buffer, sizeof(buffer), 0);
-    req = buffer;
-    server->parseRequest(socket, req);
-//
-    pthread_exit(NULL);
+        server->parseRequest(socket, req);
+    }
 
 }
+
+int Server::getFileLen(string fileName) {
+    FILE *p_file = NULL;
+    p_file = fopen(fileName.c_str(),"rb");
+    fseek(p_file,0,SEEK_END);
+    int size = ftell(p_file);
+    fclose(p_file);
+    return size;
+}
+
 
 void Server::sendFile(string fileName, int soc) {
     char buff[1024];
     memset(buff, 0, sizeof(buff));
+    int len = getFileLen(fileName);
     FILE *fp = fopen(fileName.c_str(), "r");
     int read = 0;
     read = fread(buff, 1, sizeof(buff), fp);
-    string message = "HTTP/1.1 200 OK\r\nContent-Length: 1080\r\n\r\n";
+    string message = "HTTP/1.1 200 OK\r\nContent-Length: ";
+    message += to_string(len);
+    message += "\r\n\r\n";
     message += buff;
-    message = message.substr(0,message.size()-1); // remove the last end char in buff
+    if(buff[read-1] != '\n')
+        message = message.substr(0,message.size()-1); // remove the last end char in buff
     memset(buff, 0, sizeof(buff));
     while ((read = fread(buff, 1, sizeof(buff), fp)) > 0) {
         for(int i = 0; i < read ; i++){
@@ -225,11 +232,11 @@ void Server::sendFile(string fileName, int soc) {
         }
         memset(buff, 0, sizeof(buff));
     }
+    cout << "buffer: " << message << "h" << endl;
+
     sendHeader(soc, message);
     fclose(fp);
 }
-
-
 
 
 #define port 8080
