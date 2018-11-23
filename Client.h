@@ -13,6 +13,7 @@
 #include<sys/socket.h>    //socket
 #include<arpa/inet.h> //inet_addr
 #include<netdb.h> //hostent
+#include <queue>
 
 using namespace std;
 
@@ -20,14 +21,21 @@ class Client {
 public:
     Client();
     bool conToserver(string hostName, int port);
-    void handleRequest(string req);
+    /**
+     *
+     * @param req
+     * @return 1 if post, -1 if not valid, 0 if fin or get
+     */
+    int handleRequest(string req);
     void closeSocket();
     struct in_addr getHostIP(string hostName);
-    string receiveResponse(int size, string fileName);
     bool sendRequest(string data);
-    void sendFile(string fileName);
+    void sendFile(string fileName, int len);
     int soc_desc;
-
+    queue<string> fileNames;
+    string postFileName;
+    pthread_t recvThread;
+    int fileLen;
     /*
      * send FIN signal to server
      * */
@@ -35,11 +43,13 @@ public:
 
     void handleGET(string message, string fileName);
 
-    void handlePOST(string message, string fileName);
+    void handlePOST(string message, string fileName, int len);
 
     void handleFIN(string message);
 
     vector<string> split(string stringToBeSplitted, string delimeter);
+
+
 
     /**
      * get content length in get response
@@ -48,5 +58,5 @@ public:
     int getContentLen(char *buffer, int startIndex, int recvSize);
 };
 
-
+bool handleRemainder(char buffer[], int i, int recvSize, Client* c);
 #endif //UNTITLED_CLIENT_H

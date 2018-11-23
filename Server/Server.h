@@ -64,7 +64,7 @@ public:
      * @param fileName
      * @return the data or empty string if error occured
      */
-    string recieveData(int socket, int size, string fileName);
+    string recieveData(int socket, int len, string fileName);
 
     /**
      *
@@ -89,7 +89,7 @@ public:
 
     vector<string> split(string stringToBeSplitted, string delimeter);
 
-    void handlePOST(int soc, string fileName);
+    void handlePOST(int soc, string fileName, int len);
 
     void handleFIN(int soc);
 

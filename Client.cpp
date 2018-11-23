@@ -43,30 +43,21 @@ bool Client::conToserver(string hostName, int port) {
 
 void Client::handleGET(string message, string fileName) {
     if (sendRequest(message)) {
-        receiveResponse(1024, fileName);
+        fileNames.push(fileName);
     } else {
         cout << "Error while sending message: " << message << endl;
     }
 }
 
-void Client::handlePOST(string message, string fileName) {
-    char buffer[1024];
-    memset(buffer, 0, sizeof(buffer));
+void Client::handlePOST(string message, string fileName, int len) {
     if (sendRequest(message)) {
-        if (recv(soc_desc, buffer, sizeof(buffer), 0) > 0) { // needs to parse ok 200 from server
-            if (strcmp(buffer, "HTTP/1.0 200 OK\r\n\r\n") == 0) {
-                cout << "POST OK recieved from server\n";
-                cout << "sending file ....." << endl;
-                sendFile(fileName);
-
-            } else {
-                cout << "post is not ok, " << buffer << "recieved from server!\n" << endl;
-            }
-        } else {
-            cout << "recieving failed!\n" << endl;
-        }
+        postFileName = fileName;
+        fileLen = len; // save file length to use it while sending file
+        cout << "post sent" << endl;
+        pthread_join(recvThread, NULL);
+        cout << "post finished \n\n" << endl;
     } else {
-        cout << "sending failed!\n" << endl;
+        cout << "sending: " << message << " :failed!\n" << endl;
     }
 }
 
@@ -92,7 +83,7 @@ void Client::handleFIN(string message) {
     }
 }
 
-void Client::handleRequest(string message) {
+int Client::handleRequest(string message) {
 
     vector<string> lines = split(message, "\r\n");
     // get the request type
@@ -111,12 +102,19 @@ void Client::handleRequest(string message) {
     if (method == "GET") {
         handleGET(message, fileName);
     } else if (method == "POST") {
-        handlePOST(message, fileName);
+        vector<string> cl = split(lines[1], ": ");
+        stringstream ss(cl[1]);
+        int len = 0;
+        ss >> len;
+        handlePOST(message, fileName, len);
+        return 1;
     } else if (method == "FIN") {
         handleFIN(message);
     } else {
         cout << "invalid request!" << endl;
+        return -1;
     }
+    return 0;
 }
 
 bool Client::sendRequest(string request) {
@@ -126,52 +124,6 @@ bool Client::sendRequest(string request) {
         return true;
     }
     return false;
-}
-
-string Client::receiveResponse(int size, string fileName) {
-    char buffer[size];
-    string response = "";
-    ssize_t recvSize;
-    recvSize = recv(soc_desc, buffer, sizeof(buffer), 0);
-    int i = 0;
-    while (!(buffer[i] == '\r' && buffer[i + 1] == '\n') && i < recvSize) {
-        response += buffer[i];
-        i++;
-    }
-    cout << "server response: " << response << endl;
-    response = response.substr(9, 3); // get response number
-    if (response == "200") { //OK
-        int len = getContentLen(buffer, i + 2, recvSize);
-        // move i to the start position of the data
-        while (!(buffer[i] == '\r' && buffer[i + 1] == '\n' && buffer[i + 2] == '\r' && buffer[i + 3] == '\n'))
-            i++;
-        i += 4;
-        cout << len << "  << len "<< endl;
-        char data[1024];
-        int j = 0;
-        FILE *fp = fopen(fileName.c_str(), "w");
-        while (len > 0) { // need piplining ////////////////////////////////////////////////////////////////
-            while (i < recvSize) {
-                data[j++] = buffer[i++];
-                len--;
-                if (len == 0 && i < recvSize)
-                    break;
-            }
-            fwrite(data, sizeof(char), j, fp);
-            fflush(fp);
-            if (len > 0) { // there are more data
-                i = 0, j = 0;
-                cout<<"hehehehehehhe" << fileName << len <<endl;
-                memset(buffer, 0, sizeof(buffer));
-                recvSize = recv(soc_desc, buffer, sizeof(buffer), 0);
-            }
-        }
-
-    }
-
-
-    return "";
-
 }
 
 struct in_addr Client::getHostIP(string hostName) {
@@ -184,8 +136,8 @@ struct in_addr Client::getHostIP(string hostName) {
     }
 }
 
-void Client::sendFile(string fileName) {
-    char buff[1024];
+void Client::sendFile(string fileName, int len) {
+    char buff[len];
     memset(buff, 0, sizeof(buff));
     FILE *fp = fopen(fileName.c_str(), "r");
     int read = 0;
@@ -215,7 +167,6 @@ int Client::getContentLen(char *buffer, int startIndex, int recvSize) {
            i < recvSize)  // get the remain of the response message
         response += buffer[i++];
     vector<string> headers = split(response, "\r\n");
-    cout << "hhhh" << headers[0] << endl;
     for (string str: headers) {
         if (str.substr(0, 14).compare("Content-Length") == 0) { // if Content-Length Header
             stringstream lenStream(str.substr(16, str.size() - 15));
@@ -229,27 +180,219 @@ int Client::getContentLen(char *buffer, int startIndex, int recvSize) {
 
 }
 
+void *receive(void *arg) {
+    Client *c = (Client *) arg;
+    while (1) {
+        char buffer[1024];
+        string response = "";
+        ssize_t recvSize;
+        recvSize = recv(c->soc_desc, buffer, sizeof(buffer), 0);
+        int i = 0;
+
+        while (!(buffer[i] == '\r' && buffer[i + 1] == '\n' && buffer[i + 2] == '\r' && buffer[i + 3] == '\n') &&
+               i < recvSize) {
+            response += buffer[i];
+            i++;
+        }
+        if (response == "HTTP/1.0 200 OK") { // post ack
+            string fileName = c->postFileName;
+            cout << "POST OK recieved from server\n";
+            cout << "sending file ....." << endl;
+            c->sendFile(fileName, c->fileLen);
+            break; // exit receiving thread
+        } else { // get ack with file
+            string fileName = (string) c->fileNames.front();
+            c->fileNames.pop();
+            response = "";
+            i = 0;
+            while (!(buffer[i] == '\r' && buffer[i + 1] == '\n') && i < recvSize) {
+                response += buffer[i];
+                i++;
+            }
+            cout << "server response: " << response << endl;
+
+            if (response.size() > 0)
+                response = response.substr(9, 3); // get response number
+            if (response == "200") { //OK
+                int len = c->getContentLen(buffer, i + 2, recvSize);
+                // move i to the start position of the data
+                while (!(buffer[i] == '\r' && buffer[i + 1] == '\n' && buffer[i + 2] == '\r' && buffer[i + 3] == '\n'))
+                    i++;
+                i += 4;
+                cout << "file: " << fileName << " - len: " << len << endl;
+                char data[1024];
+                int j = 0;
+                FILE *fp = fopen(fileName.c_str(), "w");
+                while (len > 0) {
+                    while (i < recvSize) {
+                        data[j++] = buffer[i++];
+                        len--;
+                        if (len == 0 && i < recvSize)
+                            break;
+                    }
+                    fwrite(data, sizeof(char), j, fp);
+                    fflush(fp);
+                    if (len > 0) { // there are more data
+                        i = 0, j = 0;
+                        memset(buffer, 0, sizeof(buffer));
+                        recvSize = recv(c->soc_desc, buffer, sizeof(buffer), 0);
+                    }
+                }
+                if (i < recvSize) { // there are more in the buffer
+                    bool isPost = handleRemainder(buffer, i, recvSize, c);
+                    if (isPost)
+                        break;
+                }
+
+            } else { // 404 not found
+                if (i < recvSize) { // there are more in the buffer
+                    bool isPost = handleRemainder(buffer, i + 4, recvSize, c);
+                    if (isPost)
+                        break;
+                }
+            }
+        }
+    }
+
+}
+
+/**
+ * return true if a post response was handled - then the recv thread will exit
+ * */
+bool handleRemainder(char *buffer, int i, int recvSize, Client *c) {
+
+    int iTemp = i;
+    string response = "";
+    int counter = 0;
+    while (!(buffer[i] == '\r' && buffer[i + 1] == '\n' && buffer[i + 2] == '\r' && buffer[i + 3] == '\n') &&
+           i < recvSize) {
+        response += buffer[i];
+        i++;
+        counter++;
+    }
+    while (counter < 15) { // for example just "HTT" is the remainder of the buffer,
+        // we need to get the remainder of the response
+        memset(buffer, 0, sizeof(*buffer));
+        recvSize = recv(c->soc_desc, buffer, sizeof(*buffer), 0);
+        i = 0;
+        while (!(buffer[i] == '\r' && buffer[i + 1] == '\n' && buffer[i + 2] == '\r' && buffer[i + 3] == '\n') &&
+               i < recvSize) {
+            response += buffer[i];
+            i++;
+            counter++;
+        }
+        if (counter < 15) // if still < 15, sleep for 500 ms to ensure all new data is arrived
+            sleep(.5);
+    }
+
+    if (response == "HTTP/1.0 200 OK") { // post ack
+        string fileName = c->postFileName;
+        cout << "POST OK recieved from server\n";
+        cout << "sending file ....." << endl;
+        c->sendFile(fileName, c->fileLen);
+        return true;
+    } else { // get ack with file
+
+        string fileName = (string) c->fileNames.front();
+        c->fileNames.pop();
+        response = "";
+        i = iTemp;
+        while (!(buffer[i] == '\r' && buffer[i + 1] == '\n') && i < recvSize) {
+            response += buffer[i];
+            i++;
+        }
+        cout << "server response: " << response << endl;
+        if (response.size() > 0)
+            response = response.substr(9, 3); // get response number
+        if (response == "200") { //OK
+            int len = c->getContentLen(buffer, i + 2, recvSize);
+            // move i to the start position of the data
+            while (!(buffer[i] == '\r' && buffer[i + 1] == '\n' && buffer[i + 2] == '\r' && buffer[i + 3] == '\n'))
+                i++;
+            i += 4;
+            cout << "file: " << fileName << " - len: " << len << endl;
+            char data[1024];
+            int j = 0;
+            FILE *fp = fopen(fileName.c_str(), "w");
+            while (len > 0) {
+                while (i < recvSize) {
+                    data[j++] = buffer[i++];
+                    len--;
+                    if (len == 0 && i < recvSize)
+                        break;
+                }
+                fwrite(data, sizeof(char), j, fp);
+                fflush(fp);
+                if (len > 0) { // there are more data
+                    i = 0, j = 0;
+                    memset(buffer, 0, sizeof(*buffer));
+                    recvSize = recv(c->soc_desc, buffer, sizeof(*buffer), 0);
+                }
+            }
+            if (i < recvSize) {
+                bool isPost = handleRemainder(buffer, i, recvSize, c);
+                if (isPost)
+                    return true;
+            }
+        } else { // not found
+            cout << "file: " << fileName << " not found!" << endl;
+            if (i < recvSize) {
+                bool isPost = handleRemainder(buffer, i + 4, recvSize, c);// handle after not found
+                if (isPost)
+                    return true;
+            }
+        }
+    }
+    return false;
+}
+
 
 int main(int argc, char *argv[]) {
 
     Client c;
     string data = "GET test.txt HTTP/1.1\r\n\r\n";
-    if (!c.conToserver("localhost", 8080))
+    if (!c.conToserver("localhost", 8080)) {
         cout << "error while connecting" << endl;
-    c.handleRequest(data);
-    data = "GET test2.txt HTTP/1.1\r\n\r\n";
-    c.handleRequest(data);
+        exit(1);
+    }
+    int res = 0;
+    pthread_create(&c.recvThread, NULL, receive, &c);
+    res = c.handleRequest(data);
+    if (res == 1) // if post, recreate receive thread
+        pthread_create(&c.recvThread, NULL, receive, &c);
+
+    data = "POST test2.txt HTTP/1.1\r\nContent-Length: 1083\r\n\r\n";
+    res = c.handleRequest(data);
+    if (res == 1) // if post, recreate receive thread
+        pthread_create(&c.recvThread, NULL, receive, &c);
+
     data = "GET test3.txt HTTP/1.1\r\n\r\n";
-    c.handleRequest(data);
+    res = c.handleRequest(data);
+    if (res == 1) // if post, recreate receive thread
+        pthread_create(&c.recvThread, NULL, receive, &c);
+
     data = "GET test4.txt HTTP/1.1\r\n\r\n";
-    c.handleRequest(data);
+    res = c.handleRequest(data);
+    if (res == 1) // if post, recreate receive thread
+        pthread_create(&c.recvThread, NULL, receive, &c);
+
     data = "GET test5.txt HTTP/1.1\r\n\r\n";
-    c.handleRequest(data);
+    res = c.handleRequest(data);
+    if (res == 1) // if post, recreate receive thread
+        pthread_create(&c.recvThread, NULL, receive, &c);
+
     data = "GET test6.txt HTTP/1.1\r\n\r\n";
-    c.handleRequest(data);
+    res = c.handleRequest(data);
+    if (res == 1) // if post, recreate receive thread
+        pthread_create(&c.recvThread, NULL, receive, &c);
+
     data = "GET test7.txt HTTP/1.1\r\n\r\n";
-    c.handleRequest(data);
-    c.sendCloseSignal();
+    res = c.handleRequest(data);
+    if (res == 1) // if post, recreate receive thread
+        pthread_create(&c.recvThread, NULL, receive, &c);
+
+//    c.sendCloseSignal();
+    pthread_join(c.recvThread, NULL);
 
     return 0;
 }

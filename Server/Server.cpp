@@ -77,20 +77,21 @@ bool Server::sendHeader(int socket, string data) {
 
 void Server::handleGET(int soc, string fileName) {
     ifstream f(fileName.c_str());
-    if(f.good()) // if file exists
+    if (f.good()) // if file exists
         sendFile(fileName, soc);
-    else{
+    else {
         string message = "HTTP/1.0 404 Not Found\r\n\r\n";
         sendHeader(soc, message);
+        cout << message << endl;
     }
 }
 
-void Server::handlePOST(int soc, string fileName) {
+void Server::handlePOST(int soc, string fileName, int len) {
     string response = "HTTP/1.0 200 OK\r\n\r\n";
     if (sendHeader(soc, response)) {
         cout << "POST OK sent\n";
         cout << "recieve data....." << endl;
-        recieveData(soc, 1024, fileName);
+        recieveData(soc, len, fileName);
         cout << "recieving data finished!" << endl;
     } else {
         cout << "Sending POST OK ack failed!" << endl;
@@ -106,56 +107,63 @@ void Server::handleFIN(int soc) {
     }
 }
 
-void Server::parseRequest(int soc, string req) {
-    cout<<"request received: \n"<< req <<endl;
+void Server::parseRequest(int soc, string reqs) {
+    vector<string> requests = split(reqs, "\r\n\r\n");
+    for (string req: requests) {
+        cout << "request received: \n" << req << endl;
 
-    vector<string> lines = split(req, "\r\n");
-    stringstream ss(lines[0]);
-    vector<string> result;
-    while (ss.good()) {
-        string substr;
-        getline(ss, substr, ' ');
-        result.push_back(substr);
-    }
-    string method = result[0];
+        vector<string> lines = split(req, "\r\n");
+        stringstream ss(lines[0]);
+        vector<string> result;
+        while (ss.good()) {
+            string substr;
+            getline(ss, substr, ' ');
+            result.push_back(substr);
+        }
+        string method = result[0];
 
-    string fileName = "";
-    if(method != "FIN")
-        fileName = result[1];
-    if (method == "GET") {
-        handleGET(soc, fileName);
-    } else if (method == "POST") {
-        handlePOST(soc, fileName);
-    } else if (method == "FIN") {
-        handleFIN(soc);
-    } else {
-        cout << "Invalid request!" << endl;
+        string fileName = "";
+        if (method != "FIN")
+            fileName = result[1];
+        if (method == "GET") {
+            handleGET(soc, fileName);
+        } else if (method == "POST") {
+            vector<string> cl = split(lines[1], ": ");
+            stringstream ss(cl[1]);
+            int len = 0;
+            ss >> len;
+            handlePOST(soc, fileName, len);
+        } else if (method == "FIN") {
+            handleFIN(soc);
+        } else {
+            cout << "Invalid request!" << endl;
+        }
     }
 }
 
-string Server::recieveData(int socket, int size, string fileName) {
+string Server::recieveData(int socket, int len, string fileName) {
     FILE *fp = fopen(fileName.c_str(), "w");
-    char buffer[size];
+    char buffer[len];
     string data = "";
     ssize_t recvSize;
-    do {
-        memset(buffer, 0, sizeof(buffer));
-        recvSize = recv(socket, buffer, sizeof(buffer), 0);
-        cout<<recvSize<<endl;
-        if (recvSize > 0) {
-            data += buffer;
-            fwrite(buffer, sizeof(char), recvSize, fp);
-            fflush(fp);
-        }
-    } while (recvSize > 0);
+
+    memset(buffer, 0, sizeof(buffer));
+    recvSize = recv(socket, buffer, sizeof(buffer), 0);
+    if (recvSize > 0) {
+        data += buffer;
+        fwrite(buffer, sizeof(char), recvSize, fp);
+        fflush(fp);
+    }
+
     fclose(fp);
+    cout << "file: " << fileName << " - length: " << len << " has been received successfully." << endl;
     return data;
 }
 
 void Server::closeCon(int socket) {
 
     close(socket);
-    cout<<"Connection closed!"<<endl;
+    cout << "Connection closed!" << endl;
     pthread_exit(NULL);
 
 }
@@ -185,12 +193,15 @@ void Server::startServer(int queueSize) {
     }
 }
 
+/**
+ * if buffer has more from another request and not parsed yet
+ * */
 void *socketThread(void *arg) {
 
     serverArgs *args = ((serverArgs *) arg);
     int socket = args->socket;
     Server *server = args->server;
-    while(1) {
+    while (1) {
         char buffer[1024];
         memset(buffer, 0, sizeof(buffer));
         string req = "";
@@ -204,8 +215,8 @@ void *socketThread(void *arg) {
 
 int Server::getFileLen(string fileName) {
     FILE *p_file = NULL;
-    p_file = fopen(fileName.c_str(),"rb");
-    fseek(p_file,0,SEEK_END);
+    p_file = fopen(fileName.c_str(), "rb");
+    fseek(p_file, 0, SEEK_END);
     int size = ftell(p_file);
     fclose(p_file);
     return size;
@@ -219,23 +230,24 @@ void Server::sendFile(string fileName, int soc) {
     FILE *fp = fopen(fileName.c_str(), "r");
     int read = 0;
     read = fread(buff, 1, sizeof(buff), fp);
+    cout << "sending file: " << fileName << endl;
     string message = "HTTP/1.1 200 OK\r\nContent-Length: ";
     message += to_string(len);
     message += "\r\n\r\n";
     message += buff;
-    if(buff[read-1] != '\n')
-        message = message.substr(0,message.size()-1); // remove the last end char in buff
+    if (buff[read - 1] != '\n')
+        message = message.substr(0, message.size() - 1); // remove the last end char in buff
     memset(buff, 0, sizeof(buff));
     while ((read = fread(buff, 1, sizeof(buff), fp)) > 0) {
-        for(int i = 0; i < read ; i++){
+        for (int i = 0; i < read; i++) {
             message += buff[i];
         }
         memset(buff, 0, sizeof(buff));
     }
-    cout << "buffer: " << message << "h" << endl;
 
     sendHeader(soc, message);
     fclose(fp);
+    cout << "file: " << fileName << " has been sent" << endl;
 }
 
 
@@ -248,6 +260,10 @@ int main() {
     cout << "socket created \n";
     bool res = server->bindServer(port);
     cout << "binding finished " << res << endl;
+    if (!res) {
+        cout << "can't bind to port: " << port << endl;
+        exit(1);
+    }
     server->listenToCon(50);
     cout << "Listening .." << endl;
 
