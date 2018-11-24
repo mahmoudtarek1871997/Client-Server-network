@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include<string.h>
 #include<string>
+#include <unistd.h>
 #include<sys/socket.h>    //socket
 #include<arpa/inet.h> //inet_addr
 #include<netdb.h> //hostent
@@ -37,8 +38,8 @@ public:
     pthread_t recvThread;
     int fileLen;
     /*
-     * send FIN signal to server
-     * */
+      * send FIN signal to server
+      * */
     void sendCloseSignal();
 
     void handleGET(string message, string fileName);

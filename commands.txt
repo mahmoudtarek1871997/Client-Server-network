@@ -1,0 +1,7 @@
+GET test.txt HTTP/1.1\r\n\r\n
+POST test2.txt HTTP/1.1\r\nContent-Length: 1083\r\n\r\n
+GET test3.txt HTTP/1.1\r\n\r\n
+GET test4.txt HTTP/1.1\r\n\r\n
+GET test5.txt HTTP/1.1\r\n\r\n
+GET test6.txt HTTP/1.1\r\n\r\n
+GET test7.txt HTTP/1.1\r\n\r\n

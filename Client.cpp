@@ -4,7 +4,7 @@
 
 #include <vector>
 #include <sstream>
-#include <zconf.h>
+#include <fstream>
 #include "Client.h"
 
 Client::Client() {}
@@ -85,7 +85,7 @@ void Client::handleFIN(string message) {
 
 int Client::handleRequest(string message) {
 
-    vector<string> lines = split(message, "\r\n");
+    vector<string> lines = split(message, "\\r\\n");
     // get the request type
     stringstream ss(lines[0]);
     vector<string> reqLine;
@@ -166,7 +166,7 @@ int Client::getContentLen(char *buffer, int startIndex, int recvSize) {
     while (!(buffer[i] == '\r' && buffer[i + 1] == '\n' && buffer[i + 2] == '\r' && buffer[i + 3] == '\n') &&
            i < recvSize)  // get the remain of the response message
         response += buffer[i++];
-    vector<string> headers = split(response, "\r\n");
+    vector<string> headers = split(response, "\\r\\n");
     for (string str: headers) {
         if (str.substr(0, 14).compare("Content-Length") == 0) { // if Content-Length Header
             stringstream lenStream(str.substr(16, str.size() - 15));
@@ -350,49 +350,64 @@ bool handleRemainder(char *buffer, int i, int recvSize, Client *c) {
 int main(int argc, char *argv[]) {
 
     Client c;
-    string data = "GET test.txt HTTP/1.1\r\n\r\n";
     if (!c.conToserver("localhost", 8080)) {
         cout << "error while connecting" << endl;
         exit(1);
     }
+
     int res = 0;
     pthread_create(&c.recvThread, NULL, receive, &c);
-    res = c.handleRequest(data);
-    if (res == 1) // if post, recreate receive thread
-        pthread_create(&c.recvThread, NULL, receive, &c);
+    fstream file("commands.txt");
+    string command;
+    while (getline(file, command))
+    {
+        res = c.handleRequest(command);
+        if (res == 1) // if post, recreate receive thread
+            pthread_create(&c.recvThread, NULL, receive, &c);
 
-    data = "POST test2.txt HTTP/1.1\r\nContent-Length: 1083\r\n\r\n";
-    res = c.handleRequest(data);
-    if (res == 1) // if post, recreate receive thread
-        pthread_create(&c.recvThread, NULL, receive, &c);
-
-    data = "GET test3.txt HTTP/1.1\r\n\r\n";
-    res = c.handleRequest(data);
-    if (res == 1) // if post, recreate receive thread
-        pthread_create(&c.recvThread, NULL, receive, &c);
-
-    data = "GET test4.txt HTTP/1.1\r\n\r\n";
-    res = c.handleRequest(data);
-    if (res == 1) // if post, recreate receive thread
-        pthread_create(&c.recvThread, NULL, receive, &c);
-
-    data = "GET test5.txt HTTP/1.1\r\n\r\n";
-    res = c.handleRequest(data);
-    if (res == 1) // if post, recreate receive thread
-        pthread_create(&c.recvThread, NULL, receive, &c);
-
-    data = "GET test6.txt HTTP/1.1\r\n\r\n";
-    res = c.handleRequest(data);
-    if (res == 1) // if post, recreate receive thread
-        pthread_create(&c.recvThread, NULL, receive, &c);
-
-    data = "GET test7.txt HTTP/1.1\r\n\r\n";
-    res = c.handleRequest(data);
-    if (res == 1) // if post, recreate receive thread
-        pthread_create(&c.recvThread, NULL, receive, &c);
-
-//    c.sendCloseSignal();
+    }
+    file.close();
     pthread_join(c.recvThread, NULL);
+    c.sendCloseSignal();
+
+    /*   int res = 0;
+       pthread_create(&c.recvThread, NULL, receive, &c);
+       res = c.handleRequest(data);
+       if (res == 1) // if post, recreate receive thread
+           pthread_create(&c.recvThread, NULL, receive, &c);
+
+       data = "POST test2.txt HTTP/1.1\r\nContent-Length: 1083\r\n\r\n";
+       res = c.handleRequest(data);
+       if (res == 1) // if post, recreate receive thread
+           pthread_create(&c.recvThread, NULL, receive, &c);
+
+       data = "GET test3.txt HTTP/1.1\r\n\r\n";
+       res = c.handleRequest(data);
+       if (res == 1) // if post, recreate receive thread
+           pthread_create(&c.recvThread, NULL, receive, &c);
+
+       data = "GET test4.txt HTTP/1.1\r\n\r\n";
+       res = c.handleRequest(data);
+       if (res == 1) // if post, recreate receive thread
+           pthread_create(&c.recvThread, NULL, receive, &c);
+
+       data = "GET test5.txt HTTP/1.1\r\n\r\n";
+       res = c.handleRequest(data);
+       if (res == 1) // if post, recreate receive thread
+           pthread_create(&c.recvThread, NULL, receive, &c);
+
+       data = "GET test6.txt HTTP/1.1\r\n\r\n";
+       res = c.handleRequest(data);
+       if (res == 1) // if post, recreate receive thread
+           pthread_create(&c.recvThread, NULL, receive, &c);
+
+       data = "GET test7.txt HTTP/1.1\r\n\r\n";
+       res = c.handleRequest(data);
+       if (res == 1) // if post, recreate receive thread
+           pthread_create(&c.recvThread, NULL, receive, &c);
+
+   //    c.sendCloseSignal();
+       pthread_join(c.recvThread, NULL);*/
 
     return 0;
 }

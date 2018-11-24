@@ -7,10 +7,11 @@
 #include <vector>
 #include <sstream>
 #include <fstream>
+#include <bits/sigthread.h>
 #include "Server.h"
 
 Server::Server() {}
-
+vector<serverArgs> clientsList;
 vector<string> Server::split(string stringToBeSplitted, string delimeter) {
     vector<string> splittedString;
     int startIndex = 0;
@@ -108,11 +109,11 @@ void Server::handleFIN(int soc) {
 }
 
 void Server::parseRequest(int soc, string reqs) {
-    vector<string> requests = split(reqs, "\r\n\r\n");
+    vector<string> requests = split(reqs, "\\r\\n\\r\\n");
     for (string req: requests) {
         cout << "request received: \n" << req << endl;
 
-        vector<string> lines = split(req, "\r\n");
+        vector<string> lines = split(req, "\\r\\n");
         stringstream ss(lines[0]);
         vector<string> result;
         while (ss.good()) {
@@ -170,7 +171,7 @@ void Server::closeCon(int socket) {
 
 void Server::startServer(int queueSize) {
     pthread_t threads[queueSize];
-    int i = 0;
+
     while (1) { // run forever
         struct sockaddr_in cli_add;
         socklen_t cli_len;
@@ -178,16 +179,17 @@ void Server::startServer(int queueSize) {
 
         server_args.socket = acceptCon();
         server_args.server = this;
-
-        int creation_result = pthread_create(&threads[i++], NULL, socketThread, &server_args);
+        server_args.time = clock();
+        clientsList.push_back(server_args);
+        int creation_result = pthread_create(&threads[clientsCount++], NULL, socketThread, &server_args);
         if (creation_result != 0)
             printf("Failed to create thread with error number : %d\n", creation_result);
 
         // if maximum queue size is reached, wait for connections to finish
-        if (i >= queueSize) {
-            for (i = 0; i < queueSize; i++)
-                pthread_join(threads[i++], NULL);
-            i = 0;
+        if (clientsCount >= queueSize) {
+            for (clientsCount = 0; clientsCount < queueSize; clientsCount++)
+                pthread_join(threads[clientsCount++], NULL);
+            clientsCount = 0;
         }
 
     }
@@ -197,7 +199,6 @@ void Server::startServer(int queueSize) {
  * if buffer has more from another request and not parsed yet
  * */
 void *socketThread(void *arg) {
-
     serverArgs *args = ((serverArgs *) arg);
     int socket = args->socket;
     Server *server = args->server;
@@ -207,8 +208,8 @@ void *socketThread(void *arg) {
         string req = "";
         recv(socket, buffer, sizeof(buffer), 0);
         req = buffer;
-
         server->parseRequest(socket, req);
+        args->time = clock();
     }
 
 }
@@ -222,7 +223,18 @@ int Server::getFileLen(string fileName) {
     return size;
 }
 
-
+void *interrupt(void *arg){
+    //check for time for each thread
+    while (1) {
+        for (int j = 0; j < clientsList.size(); j++) {
+            if (((clock() - clientsList.at(j).time) / CLOCKS_PER_SEC) > (defTimeOut - (clientsCount * waitFactor))) {
+                cout << " timeout " << endl;
+                close(clientsList.at(j).socket);
+                clientsList.erase(clientsList.begin() + j);
+            }
+        }
+    }
+}
 void Server::sendFile(string fileName, int soc) {
     char buff[1024];
     memset(buff, 0, sizeof(buff));
@@ -254,12 +266,15 @@ void Server::sendFile(string fileName, int soc) {
 #define port 8080
 
 int main() {
+    pthread_t interruptThread;
+    pthread_create(&interruptThread, NULL, interrupt, NULL);
     cout << "Hello, Servser! \n";
     Server *server = new Server();
     server->createSocketFD();
     cout << "socket created \n";
     bool res = server->bindServer(port);
     cout << "binding finished " << res << endl;
+
     if (!res) {
         cout << "can't bind to port: " << port << endl;
         exit(1);
@@ -268,6 +283,8 @@ int main() {
     cout << "Listening .." << endl;
 
     server->startServer(50);
+
+
 
     return 0;
 }

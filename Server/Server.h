@@ -19,6 +19,7 @@
 using namespace std;
 
 class Server {
+
 public:
     Server();
 
@@ -92,17 +93,24 @@ public:
     void handlePOST(int soc, string fileName, int len);
 
     void handleFIN(int soc);
-
     int getFileLen(string fileName);
-};
 
+
+};
 struct serverArgs{
     int socket;
     Server* server;
+    clock_t time;
 };
+
+
 /**
      * Socket thread job
      * @param arg send the socket fd as argument
      * @return
      */
 void *socketThread(void *arg);
+void *interrupt(void *arg);
+int defTimeOut = 120;
+int waitFactor = 20;
+int clientsCount = 0;
