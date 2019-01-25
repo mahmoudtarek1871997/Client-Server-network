@@ -227,8 +227,9 @@ void *receive(void *arg) {
                     while (i < recvSize) {
                         data[j++] = buffer[i++];
                         len--;
-                        if (len == 0 && i < recvSize)
+                        if (len == 0 && i < recvSize){
                             break;
+                        }
                     }
                     fwrite(data, sizeof(char), j, fp);
                     fflush(fp);
@@ -356,7 +357,9 @@ int main(int argc, char *argv[]) {
     }
 
     int res = 0;
+
     pthread_create(&c.recvThread, NULL, receive, &c);
+
     fstream file("commands.txt");
     string command;
     while (getline(file, command))
